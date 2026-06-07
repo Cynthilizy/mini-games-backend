@@ -32,7 +32,12 @@ const db = new Pool({
 //middle ware
 app.use(
   cors({
-    origin: ['http://localhost:3000'],
+    origin: [
+      process.env.CLIENT_URL,
+      process.env.MINI_GAMES_API_URL,
+      process.env.PORTFOLIO_API_URL,
+    ],
+    credentials: true,
   })
 );
 app.use(express.urlencoded({ extended: true }));
