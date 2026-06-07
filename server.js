@@ -530,23 +530,37 @@ app.put('/delete-account', auth, async (req, res) => {
 
 app.get('/flags', async (req, res) => {
   try {
+    console.log('FLAGS ROUTE HIT');
+
     const result = await db.query('SELECT * FROM flags');
+
     console.log('FLAGS DB RESULT:', result.rows);
+
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Database error' });
+    console.error('FLAGS ERROR:', err);
+
+    res.status(500).json({
+      error: err.message,
+    });
   }
 });
 
 app.get('/capitals', async (req, res) => {
   try {
+    console.log('CAPITALS ROUTE HIT');
+
     const result = await db.query('SELECT * FROM capitals');
+
     console.log('CAPITALS DB RESULT:', result.rows);
+
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Database error' });
+    console.error('CAPITALS ERROR:', err);
+
+    res.status(500).json({
+      error: err.message,
+    });
   }
 });
 
