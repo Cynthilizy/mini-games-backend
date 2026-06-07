@@ -46,6 +46,10 @@ app.use(express.json());
 
 app.use(passport.initialize());
 
+console.log('CLIENT_URL:', process.env.CLIENT_URL);
+console.log('MINI_GAMES_API_URL:', process.env.MINI_GAMES_API_URL);
+console.log('PORTFOLIO_API_URL:', process.env.PORTFOLIO_API_URL);
+
 /*app.use('/', express.static(path.join(__dirname, 'dist')));
 
 app.get('/', (req, res) => {
