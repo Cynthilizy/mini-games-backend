@@ -528,7 +528,7 @@ app.put('/delete-account', auth, async (req, res) => {
   }
 });
 
-app.get('/flags', auth, async (req, res) => {
+app.get('/flags', async (req, res) => {
   try {
     const result = await db.query('SELECT * FROM flags');
     console.log('FLAGS DB RESULT:', result.rows);
@@ -539,7 +539,7 @@ app.get('/flags', auth, async (req, res) => {
   }
 });
 
-app.get('/capitals', auth, async (req, res) => {
+app.get('/capitals', async (req, res) => {
   try {
     const result = await db.query('SELECT * FROM capitals');
     console.log('CAPITALS DB RESULT:', result.rows);
