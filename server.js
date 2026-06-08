@@ -60,21 +60,19 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist/index.html'));
 });*/
 
-function auth(req, res, next) {
+const auth = (req, res, next) => {
   const token = req.cookies.token;
 
-  if (!token) {
-    return res.status(401).json({ error: 'Not logged in' });
-  }
+  if (!token) return res.sendStatus(401);
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
     next();
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid token' });
+    return res.sendStatus(401);
   }
-}
+};
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -271,8 +269,8 @@ app.get(
 
     res.cookie('token', token, {
       httpOnly: true,
-      sameSite: 'lax',
-      secure: false,
+      secure: true,
+      sameSite: 'none',
     });
 
     res.redirect(process.env.CLIENT_URL);
@@ -289,8 +287,8 @@ app.get(
 
     res.cookie('token', token, {
       httpOnly: true,
-      sameSite: 'lax',
-      secure: false,
+      secure: true,
+      sameSite: 'none',
     });
 
     res.redirect(process.env.CLIENT_URL);
@@ -335,8 +333,8 @@ app.post('/login', loginLimiter, async (req, res) => {
 
     res.cookie('token', token, {
       httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
+      secure: true,
+      sameSite: 'none',
     });
 
     res.json({
@@ -415,12 +413,13 @@ app.post('/register', async (req, res) => {
   }
 });
 
-app.post('/logout', auth, (req, res) => {
+app.post('/logout', (req, res) => {
   res.clearCookie('token', {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: false,
+    secure: true,
+    sameSite: 'none',
   });
+
   res.json({ message: 'Logout successful' });
 });
 
@@ -529,7 +528,8 @@ app.put('/delete-account', auth, async (req, res) => {
 
     res.clearCookie('token', {
       httpOnly: true,
-      sameSite: 'lax',
+      secure: true,
+      sameSite: 'none',
     });
 
     res.json({ message: 'Account soft deleted' });
@@ -537,6 +537,10 @@ app.put('/delete-account', auth, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Database error' });
   }
+});
+
+app.get('/me', auth, (req, res) => {
+  res.json(req.user);
 });
 
 app.get('/game-stats/:gameType', auth, async (req, res) => {
@@ -608,10 +612,15 @@ app.post('/submit-score', auth, async (req, res) => {
     } else {
       const stats = existing.rows[0];
 
-      const newBest = score > stats.best_score ? score : stats.best_score;
+      const newBest =
+        stats.best_score === null || score > stats.best_score
+          ? score
+          : stats.best_score;
 
       const newBestTime =
-        score > stats.best_score ? now : stats.best_score_time;
+        stats.best_score === null || score > stats.best_score
+          ? now
+          : stats.best_score_time;
 
       await db.query(
         `
