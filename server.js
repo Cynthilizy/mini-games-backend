@@ -54,10 +54,6 @@ app.use(express.json());
 
 app.use(passport.initialize());
 
-console.log('CLIENT_URL:', process.env.CLIENT_URL);
-console.log('MINI_GAMES_API_URL:', process.env.MINI_GAMES_API_URL);
-console.log('PORTFOLIO_API_URL:', process.env.PORTFOLIO_API_URL);
-
 /*app.use('/', express.static(path.join(__dirname, 'dist')));
 
 app.get('/', (req, res) => {
@@ -343,7 +339,14 @@ app.post('/login', loginLimiter, async (req, res) => {
       sameSite: 'lax',
     });
 
-    res.json({ message: 'Login successful' });
+    res.json({
+      message: 'Login successful',
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+      },
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Database error' });
@@ -536,13 +539,105 @@ app.put('/delete-account', auth, async (req, res) => {
   }
 });
 
+app.get('/game-stats/:gameType', auth, async (req, res) => {
+  const gamerId = req.user.id;
+  const { gameType } = req.params;
+
+  try {
+    const result = await db.query(
+      `
+      SELECT 
+        pgs.*
+      FROM player_game_stats pgs
+      JOIN games g ON g.id = pgs.game_id
+      WHERE pgs.gamer_id = $1 AND g.name = $2
+      `,
+      [gamerId, gameType]
+    );
+
+    res.json(result.rows[0] || null);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/submit-score', auth, async (req, res) => {
+  const gamerId = req.user.id;
+  const { gameType, score } = req.body;
+
+  try {
+    // get game_id
+    const gameResult = await db.query(`SELECT id FROM games WHERE name = $1`, [
+      gameType,
+    ]);
+
+    if (gameResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Game not found' });
+    }
+
+    const gameId = gameResult.rows[0].id;
+
+    // check if row exists
+    const existing = await db.query(
+      `
+      SELECT * FROM player_game_stats
+      WHERE gamer_id = $1 AND game_id = $2
+      `,
+      [gamerId, gameId]
+    );
+
+    const now = new Date();
+
+    if (existing.rows.length === 0) {
+      await db.query(
+        `
+        INSERT INTO player_game_stats (
+          gamer_id,
+          game_id,
+          last_score,
+          last_played_at,
+          best_score,
+          best_score_time,
+          plays
+        )
+        VALUES ($1,$2,$3,$4,$3,$4,1)
+        `,
+        [gamerId, gameId, score, now]
+      );
+    } else {
+      const stats = existing.rows[0];
+
+      const newBest = score > stats.best_score ? score : stats.best_score;
+
+      const newBestTime =
+        score > stats.best_score ? now : stats.best_score_time;
+
+      await db.query(
+        `
+        UPDATE player_game_stats
+        SET
+          last_score = $1,
+          last_played_at = $2,
+          best_score = $3,
+          best_score_time = $4,
+          plays = plays + 1
+        WHERE gamer_id = $5 AND game_id = $6
+        `,
+        [score, now, newBest, newBestTime, gamerId, gameId]
+      );
+    }
+
+    res.json({ message: 'Score updated' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 app.get('/flags', async (req, res) => {
   try {
-    console.log('FLAGS ROUTE HIT');
-
     const result = await db.query('SELECT * FROM flags');
-
-    console.log('FLAGS DB RESULT:', result.rows);
 
     res.json(result.rows);
   } catch (err) {
@@ -556,11 +651,7 @@ app.get('/flags', async (req, res) => {
 
 app.get('/capitals', async (req, res) => {
   try {
-    console.log('CAPITALS ROUTE HIT');
-
     const result = await db.query('SELECT * FROM capitals');
-
-    console.log('CAPITALS DB RESULT:', result.rows);
 
     res.json(result.rows);
   } catch (err) {
