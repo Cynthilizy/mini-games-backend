@@ -175,22 +175,40 @@ passport.use(
         if (oauthRes.rows.length > 0) {
           gamerId = oauthRes.rows[0].gamer_id;
         } else {
-          // 2. Create new gamer
-          const username = await createUniqueUsername(db);
+          // Check if a gamer already exists with this email
+          let existingUser = null;
 
-          const gamerRes = await db.query(
-            `INSERT INTO gamers (username, email, password)
-             VALUES ($1, $2, $3)
-             RETURNING id, username, email`,
-            [username, email, null]
-          );
+          if (email) {
+            existingUser = await db.query(
+              `SELECT id FROM gamers WHERE email = $1`,
+              [email]
+            );
+          }
 
-          gamerId = gamerRes.rows[0].id;
+          if (existingUser.rows.length > 0) {
+            gamerId = existingUser.rows[0].id;
+          } else {
+            const username = await createUniqueUsername(db);
 
-          // 3. Link OAuth account
+            const gamerRes = await db.query(
+              `INSERT INTO gamers (username, email, password)
+                VALUES ($1, $2, $3)
+                RETURNING id`,
+              [username, email, null]
+            );
+
+            gamerId = gamerRes.rows[0].id;
+          }
+
+          // Link OAuth account
           await db.query(
-            `INSERT INTO oauth_accounts (gamer_id, provider, provider_id)
-             VALUES ($1, $2, $3)`,
+            `INSERT INTO oauth_accounts (
+                gamer_id,
+                provider,
+                provider_id
+              )
+              VALUES ($1, $2, $3)
+              ON CONFLICT DO NOTHING`,
             [gamerId, provider, providerId]
           );
         }
@@ -234,22 +252,40 @@ passport.use(
         if (oauthRes.rows.length > 0) {
           gamerId = oauthRes.rows[0].gamer_id;
         } else {
-          // 2. Create new gamer
-          const username = await createUniqueUsername(db);
+          // Check if a gamer already exists with this email
+          let existingUser = null;
 
-          const gamerRes = await db.query(
-            `INSERT INTO gamers (username, email, password)
-             VALUES ($1, $2, $3)
-             RETURNING id, username, email`,
-            [username, email, null]
-          );
+          if (email) {
+            existingUser = await db.query(
+              `SELECT id FROM gamers WHERE email = $1`,
+              [email]
+            );
+          }
 
-          gamerId = gamerRes.rows[0].id;
+          if (existingUser.rows.length > 0) {
+            gamerId = existingUser.rows[0].id;
+          } else {
+            const username = await createUniqueUsername(db);
 
-          // 3. Link OAuth account
+            const gamerRes = await db.query(
+              `INSERT INTO gamers (username, email, password)
+                VALUES ($1, $2, $3)
+                RETURNING id`,
+              [username, email, null]
+            );
+
+            gamerId = gamerRes.rows[0].id;
+          }
+
+          // Link OAuth account
           await db.query(
-            `INSERT INTO oauth_accounts (gamer_id, provider, provider_id)
-             VALUES ($1, $2, $3)`,
+            `INSERT INTO oauth_accounts (
+                gamer_id,
+                provider,
+                provider_id
+              )
+              VALUES ($1, $2, $3)
+              ON CONFLICT DO NOTHING`,
             [gamerId, provider, providerId]
           );
         }
