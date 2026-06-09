@@ -538,8 +538,13 @@ app.put('/delete-account', auth, async (req, res) => {
   }
 });
 
-app.get('/me', auth, (req, res) => {
-  res.json(req.user);
+app.get('/me', auth, async (req, res) => {
+  const result = await db.query(
+    'SELECT id, username, email FROM gamers WHERE id = $1',
+    [req.user.id]
+  );
+
+  res.json(result.rows[0]);
 });
 
 app.get('/game-stats/:gameType', auth, async (req, res) => {
