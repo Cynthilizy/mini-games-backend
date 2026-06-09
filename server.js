@@ -164,8 +164,12 @@ passport.use(
 
         // 1. Check if OAuth already exists
         let oauthRes = await db.query(
-          `SELECT gamer_id FROM oauth_accounts 
-           WHERE provider = $1 AND provider_id = $2`,
+          `SELECT oa.gamer_id
+          FROM oauth_accounts oa
+          JOIN gamers g ON g.id = oa.gamer_id
+          WHERE oa.provider = $1
+            AND oa.provider_id = $2
+            AND g.deleted_at IS NULL`,
           [provider, providerId]
         );
 
