@@ -76,6 +76,9 @@ const auth = (req, res, next) => {
   console.log('cookies:', req.cookies);
   console.log('token:', req.cookies?.token);
 
+  console.log('NODE_ENV:', process.env.NODE_ENV);
+  console.log('isProd:', isProd);
+
   if (!token) return res.sendStatus(401);
 
   try {
