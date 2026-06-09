@@ -37,14 +37,24 @@ const db = new Pool({
   },
 });
 
+const isProd = process.env.NODE_ENV === 'production';
+const SIX_HOURS = 6 * 60 * 60 * 1000;
+
+const allowedOrigins = isProd
+  ? [process.env.MINI_GAMES_API_URL, process.env.PORTFOLIO_API_URL]
+  : [process.env.CLIENT_URL];
+
+const cookieOptions = {
+  httpOnly: true,
+  secure: isProd,
+  sameSite: isProd ? 'none' : 'lax',
+  maxAge: SIX_HOURS,
+};
+
 //middle ware
 app.use(
   cors({
-    origin: [
-      process.env.CLIENT_URL,
-      process.env.MINI_GAMES_API_URL,
-      process.env.PORTFOLIO_API_URL,
-    ],
+    origin: allowedOrigins,
     credentials: true,
   })
 );
@@ -267,13 +277,10 @@ app.get(
       expiresIn: '6h',
     });
 
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-    });
-
-    res.redirect(process.env.CLIENT_URL);
+    res.cookie('token', token, cookieOptions);
+    res.redirect(
+      isProd ? process.env.MINI_GAMES_API_URL : process.env.CLIENT_URL
+    );
   }
 );
 
@@ -285,13 +292,10 @@ app.get(
       expiresIn: '6h',
     });
 
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-    });
-
-    res.redirect(process.env.CLIENT_URL);
+    res.cookie('token', token, cookieOptions);
+    res.redirect(
+      isProd ? process.env.MINI_GAMES_API_URL : process.env.CLIENT_URL
+    );
   }
 );
 
@@ -331,11 +335,7 @@ app.post('/login', loginLimiter, async (req, res) => {
       }
     );
 
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-    });
+    res.cookie('token', token, cookieOptions);
 
     res.json({
       message: 'Login successful',
@@ -414,12 +414,7 @@ app.post('/register', async (req, res) => {
 });
 
 app.post('/logout', (req, res) => {
-  res.clearCookie('token', {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'none',
-  });
-
+  res.clearCookie('token', cookieOptions);
   res.json({ message: 'Logout successful' });
 });
 
@@ -526,11 +521,7 @@ app.put('/delete-account', auth, async (req, res) => {
 
     await db.query(`DELETE FROM oauth_accounts WHERE gamer_id = $1`, [userId]);
 
-    res.clearCookie('token', {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-    });
+    res.clearCookie('token', cookieOptions);
 
     res.json({ message: 'Account soft deleted' });
   } catch (err) {
@@ -698,7 +689,7 @@ app.get('/capitals', async (req, res) => {
       [email]
     );
 
-    res.clearCookie("token");
+    res.clearCookie("token", cookieoptions);
     res.json({ message: "Account deleted" });
 
   } catch (err) {
