@@ -201,7 +201,7 @@ passport.use(
             gamerId = activeUser.rows[0].id;
           } else if (deletedUser.rows.length > 0) {
             // CASE 2: deleted user exists → NEW account
-            const gamerId = deletedUser.rows[0].id;
+            gamerId = deletedUser.rows[0].id;
             const newUsername = await createUniqueUsername(db);
             await db.query(
               `UPDATE gamers
