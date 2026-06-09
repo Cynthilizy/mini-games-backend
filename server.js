@@ -9,7 +9,6 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import passport from 'passport';
-import FacebookStrategy from 'passport-facebook';
 import GoogleStrategy from 'passport-google-oauth20';
 import rateLimit from 'express-rate-limit';
 
@@ -176,105 +175,50 @@ passport.use(
           gamerId = oauthRes.rows[0].gamer_id;
         } else {
           // Check if a gamer already exists with this email
-          let existingUser = null;
+          let activeUser = null;
+          let deletedUser = null;
 
           if (email) {
-            existingUser = await db.query(
-              `SELECT id FROM gamers WHERE email = $1`,
+            activeUser = await db.query(
+              `SELECT id FROM gamers 
+              WHERE email = $1 AND deleted_at IS NULL`,
+              [email]
+            );
+
+            deletedUser = await db.query(
+              `SELECT id FROM gamers 
+              WHERE email = $1 AND deleted_at IS NOT NULL`,
               [email]
             );
           }
 
-          if (existingUser.rows.length > 0) {
-            gamerId = existingUser.rows[0].id;
+          if (activeUser.rows.length > 0) {
+            // CASE 1: active user exists
+            gamerId = activeUser.rows[0].id;
+          } else if (deletedUser.rows.length > 0) {
+            // CASE 2: deleted user exists → NEW account
+            const gamerId = deletedUser.rows[0].id;
+            const newUsername = await createUniqueUsername(db);
+            await db.query(
+              `UPDATE gamers
+                  SET username = $1,
+                      deleted_at = NULL,
+                      password = NULL
+                  WHERE id = $2`,
+              [newUsername, gamerId]
+            );
           } else {
+            // CASE 3: brand new user
             const username = await createUniqueUsername(db);
 
-            const gamerRes = await db.query(
+            const newUser = await db.query(
               `INSERT INTO gamers (username, email, password)
-                VALUES ($1, $2, $3)
-                RETURNING id`,
-              [username, email, null]
-            );
-
-            gamerId = gamerRes.rows[0].id;
-          }
-
-          // Link OAuth account
-          await db.query(
-            `INSERT INTO oauth_accounts (
-                gamer_id,
-                provider,
-                provider_id
-              )
               VALUES ($1, $2, $3)
-              ON CONFLICT DO NOTHING`,
-            [gamerId, provider, providerId]
-          );
-        }
-
-        // 4. Load final user
-        const userRes = await db.query(
-          `SELECT id, username, email FROM gamers WHERE id = $1`,
-          [gamerId]
-        );
-
-        return done(null, userRes.rows[0]);
-      } catch (err) {
-        return done(err, null);
-      }
-    }
-  )
-);
-
-passport.use(
-  new FacebookStrategy(
-    {
-      clientID: process.env.FACEBOOK_CLIENT_ID,
-      clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
-      callbackURL: process.env.FACEBOOK_CALLBACK_URL,
-    },
-    async (accessToken, refreshToken, profile, done) => {
-      try {
-        const providerId = profile.id;
-        const provider = 'facebook';
-        const email = profile.emails?.[0]?.value || null;
-
-        // 1. Check if OAuth already exists
-        let oauthRes = await db.query(
-          `SELECT gamer_id FROM oauth_accounts 
-           WHERE provider = $1 AND provider_id = $2`,
-          [provider, providerId]
-        );
-
-        let gamerId;
-
-        if (oauthRes.rows.length > 0) {
-          gamerId = oauthRes.rows[0].gamer_id;
-        } else {
-          // Check if a gamer already exists with this email
-          let existingUser = null;
-
-          if (email) {
-            existingUser = await db.query(
-              `SELECT id FROM gamers WHERE email = $1`,
-              [email]
-            );
-          }
-
-          if (existingUser.rows.length > 0) {
-            gamerId = existingUser.rows[0].id;
-          } else {
-            const username = await createUniqueUsername(db);
-
-            const gamerRes = await db.query(
-              `INSERT INTO gamers (username, email, password)
-                VALUES ($1, $2, $3)
-                RETURNING id`,
+              RETURNING id`,
               [username, email, null]
             );
 
-            gamerId = gamerRes.rows[0].id;
+            gamerId = newUser.rows[0].id;
           }
 
           // Link OAuth account
@@ -307,21 +251,6 @@ passport.use(
 app.get(
   '/auth/google/callback',
   passport.authenticate('google', { session: false }),
-  (req, res) => {
-    const token = jwt.sign({ id: req.user.id }, process.env.JWT_SECRET, {
-      expiresIn: '6h',
-    });
-
-    res.cookie('token', token, cookieOptions);
-    res.redirect(
-      isProd ? process.env.MINI_GAMES_API_URL : process.env.CLIENT_URL
-    );
-  }
-);
-
-app.get(
-  '/auth/facebook/callback',
-  passport.authenticate('facebook', { session: false }),
   (req, res) => {
     const token = jwt.sign({ id: req.user.id }, process.env.JWT_SECRET, {
       expiresIn: '6h',
@@ -461,14 +390,6 @@ app.get(
   })
 );
 
-app.get(
-  '/auth/facebook',
-  passport.authenticate('facebook', {
-    scope: ['email'],
-    session: false,
-  })
-);
-
 app.put('/change-username', auth, async (req, res) => {
   const { newUsername } = req.body;
   const userId = req.user.id;
@@ -546,19 +467,23 @@ app.put('/delete-account', auth, async (req, res) => {
   const userId = req.user.id;
 
   try {
+    // 1. Soft delete user
     await db.query(
       `UPDATE gamers
        SET deleted_at = NOW()
-       WHERE id = $1
-       AND deleted_at IS NULL`,
+       WHERE id = $1 AND deleted_at IS NULL`,
       [userId]
     );
 
-    await db.query(`DELETE FROM oauth_accounts WHERE gamer_id = $1`, [userId]);
+    // 2. Reset stats (fresh start on return)
+    await db.query(`DELETE FROM player_game_stats WHERE gamer_id = $1`, [
+      userId,
+    ]);
 
+    // 3. Clear session cookie
     res.clearCookie('token', cookieOptions);
 
-    res.json({ message: 'Account soft deleted' });
+    res.json({ message: 'Account deleted (stats reset)' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Database error' });
