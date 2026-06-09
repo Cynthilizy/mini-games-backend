@@ -72,15 +72,6 @@ app.get('/', (req, res) => {
 
 const auth = (req, res, next) => {
   const token = req.cookies.token;
-
-  console.log('cookies:', req.cookies);
-  console.log('token:', req.cookies?.token);
-
-  console.log('NODE_ENV:', process.env.NODE_ENV);
-  console.log('isProd:', isProd);
-
-  console.log('ORIGIN:', req.headers.origin);
-  console.log('ALLOWED:', allowedOrigins);
   if (!token) return res.sendStatus(401);
 
   try {
