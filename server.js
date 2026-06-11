@@ -162,14 +162,17 @@ passport.use(
         const provider = 'google';
         const email = profile.emails?.[0]?.value || null;
 
-        // 1. Check if OAuth already exists
-        let oauthRes = await db.query(
-          `SELECT oa.gamer_id
+        // =========================
+        // 1. OAUTH LOOKUP (PRIMARY)
+        // =========================
+        const oauthRes = await db.query(
+          `
+          SELECT oa.gamer_id, g.deleted_at
           FROM oauth_accounts oa
           JOIN gamers g ON g.id = oa.gamer_id
           WHERE oa.provider = $1
             AND oa.provider_id = $2
-            AND g.deleted_at IS NULL`,
+          `,
           [provider, providerId]
         );
 
@@ -177,75 +180,114 @@ passport.use(
 
         if (oauthRes.rows.length > 0) {
           gamerId = oauthRes.rows[0].gamer_id;
+
+          // restore if deleted
+          if (oauthRes.rows[0].deleted_at !== null) {
+            const newUsername = await createUniqueUsername(db);
+
+            await db.query(
+              `
+              UPDATE gamers
+              SET username = $1,
+                  deleted_at = NULL,
+                  password = NULL
+              WHERE id = $2
+              `,
+              [newUsername, gamerId]
+            );
+          }
         } else {
-          // Check if a gamer already exists with this email
+          // =========================
+          // 2. EMAIL LOOKUP (FALLBACK)
+          // =========================
           let activeUser = null;
           let deletedUser = null;
 
           if (email) {
             activeUser = await db.query(
-              `SELECT id FROM gamers 
-              WHERE email = $1 AND deleted_at IS NULL`,
+              `
+              SELECT id FROM gamers
+              WHERE email = $1 AND deleted_at IS NULL
+              `,
               [email]
             );
 
             deletedUser = await db.query(
-              `SELECT id FROM gamers 
-              WHERE email = $1 AND deleted_at IS NOT NULL`,
+              `
+              SELECT id FROM gamers
+              WHERE email = $1 AND deleted_at IS NOT NULL
+              `,
               [email]
             );
           }
 
+          // CASE 2A: active user exists
           if (activeUser.rows.length > 0) {
-            // CASE 1: active user exists
             gamerId = activeUser.rows[0].id;
-          } else if (deletedUser.rows.length > 0) {
-            // CASE 2: deleted user exists → NEW account
+          }
+
+          // CASE 2B: deleted user exists → recycle
+          else if (deletedUser.rows.length > 0) {
             gamerId = deletedUser.rows[0].id;
+
             const newUsername = await createUniqueUsername(db);
             await db.query(
-              `UPDATE gamers
-                  SET username = $1,
-                      deleted_at = NULL,
-                      password = NULL
-                  WHERE id = $2`,
+              `
+              UPDATE gamers
+              SET username = $1,
+                  deleted_at = NULL,
+                  password = NULL
+              WHERE id = $2
+              `,
               [newUsername, gamerId]
             );
-          } else {
-            // CASE 3: brand new user
-            const username = await createUniqueUsername(db);
+          }
 
+          // CASE 2C: brand new user
+          else {
+            const username = await createUniqueUsername(db);
             const newUser = await db.query(
-              `INSERT INTO gamers (username, email, password)
-              VALUES ($1, $2, $3)
-              RETURNING id`,
-              [username, email, null]
+              `
+              INSERT INTO gamers (username, email, password)
+              VALUES ($1, $2, NULL)
+              RETURNING id
+              `,
+              [username, email]
             );
 
             gamerId = newUser.rows[0].id;
           }
 
-          // Link OAuth account
+          // =========================
+          // LINK OAUTH (ONLY HERE)
+          // =========================
           await db.query(
-            `INSERT INTO oauth_accounts (
-                gamer_id,
-                provider,
-                provider_id
-              )
-              VALUES ($1, $2, $3)
-              ON CONFLICT DO NOTHING`,
+            `
+            INSERT INTO oauth_accounts (gamer_id, provider, provider_id)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (provider, provider_id) DO NOTHING
+            `,
             [gamerId, provider, providerId]
           );
         }
 
-        // 4. Load final user
+        // =========================
+        // FINAL LOAD USER
+        // =========================
         const userRes = await db.query(
-          `SELECT id, username, email FROM gamers WHERE id = $1`,
+          `
+          SELECT id, username, email
+          FROM gamers
+          WHERE id = $1
+          `,
           [gamerId]
         );
 
+        console.log('✅ LOGIN SUCCESS:', userRes.rows[0]);
+
         return done(null, userRes.rows[0]);
       } catch (err) {
+        console.error('❌ GOOGLE AUTH ERROR:', err);
         return done(err, null);
       }
     }
@@ -340,7 +382,6 @@ app.post('/register', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, saltingRounds);
-
     const username = await createUniqueUsername(db);
 
     // Restore deleted user
