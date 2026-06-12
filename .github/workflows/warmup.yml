@@ -1,7 +1,7 @@
 name: Keep Render Warm
 on:
-   schedule:
-     - cron: "*/5 * * * *"
+  schedule:
+    - cron: '*/5 * * * *'
 jobs:
   ping:
     runs-on: ubuntu-latest
@@ -9,3 +9,4 @@ jobs:
     steps:
       - name: Ping warmup endpoint
         run: curl -s https://mini-games-backend-h7ab.onrender.com/warmup
+#trigger check
