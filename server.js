@@ -309,6 +309,22 @@ app.get(
   }
 );
 
+app.get('/warmup', async (req, res) => {
+  try {
+    await db.query('SELECT 1');
+
+    res.status(200).json({
+      status: 'ok',
+    });
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+});
+
 app.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
 
