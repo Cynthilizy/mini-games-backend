@@ -310,9 +310,10 @@ app.get(
       expiresIn: '6h',
     });
 
-    res.cookie('token', token, cookieOptions);
-    res.redirect(
-      isProd ? process.env.MINI_GAMES_API_URL : process.env.CLIENT_URL
+    return res.redirect(
+      isProd
+        ? `${process.env.MINI_GAMES_API_URL}/auth/success?token=${token}`
+        : `${process.env.CLIENT_URL}/auth/success?token=${token}`
     );
   }
 );
