@@ -48,6 +48,7 @@ const cookieOptions = {
   secure: isProd,
   sameSite: isProd ? 'none' : 'lax',
   maxAge: SIX_HOURS,
+  path: '/',
 };
 
 //middle ware
