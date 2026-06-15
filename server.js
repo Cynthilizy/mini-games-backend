@@ -295,6 +295,14 @@ passport.use(
 );
 
 app.get(
+  '/auth/google',
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    session: false,
+  })
+);
+
+app.get(
   '/auth/google/callback',
   passport.authenticate('google', { session: false }),
   (req, res) => {
@@ -442,14 +450,6 @@ app.post('/logout', (req, res) => {
   res.clearCookie('token', cookieOptions);
   res.json({ message: 'Logout successful' });
 });
-
-app.get(
-  '/auth/google',
-  passport.authenticate('google', {
-    scope: ['profile', 'email'],
-    session: false,
-  })
-);
 
 app.put('/change-username', auth, async (req, res) => {
   const { newUsername } = req.body;
