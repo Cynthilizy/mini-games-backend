@@ -302,7 +302,7 @@ app.get(
   })
 );
 
-/*app.get(
+app.get(
   '/auth/google/callback',
   passport.authenticate('google', { session: false }),
   (req, res) => {
@@ -313,22 +313,6 @@ app.get(
     res.cookie('token', token, cookieOptions);
     res.redirect(
       isProd ? process.env.MINI_GAMES_API_URL : process.env.CLIENT_URL
-    );
-  }
-);*/
-
-app.get(
-  '/auth/google/callback',
-  passport.authenticate('google', { session: false }),
-  (req, res) => {
-    const token = jwt.sign({ id: req.user.id }, process.env.JWT_SECRET, {
-      expiresIn: '6h',
-    });
-
-    return res.redirect(
-      isProd
-        ? `${process.env.MINI_GAMES_API_URL}/auth/success?token=${token}`
-        : `${process.env.CLIENT_URL}/auth/success?token=${token}`
     );
   }
 );
